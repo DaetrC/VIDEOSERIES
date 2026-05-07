@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Maps — Daetrius</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f2ee;
+    --surface: #ffffff;
+    --border: #ddd9d3;
+    --text-primary: #1a1815;
+    --text-secondary: #1e1b18;
+    --text-muted: #6b6560;
+    --accent: #8a6a3a;
+    --accent-dim: #a08050;
+    --mono: 'DM Mono', monospace;
+    --serif: 'Cormorant Garamond', Georgia, serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--serif);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* Header */
+  .header {
+    padding: 80px 48px 60px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 48px;
+    width: 60px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--accent-dim);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 300;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+  }
+
+  .header h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .header-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.08em;
+    line-height: 1.8;
+    max-width: 480px;
+  }
+
+  /* Nav */
+  .nav {
+    display: flex;
+    gap: 0;
+    padding: 0 48px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar { display: none; }
+
+  .nav-item {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    padding: 20px 24px;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    margin-bottom: -1px;
+  }
+
+  .nav-item:hover { color: var(--text-primary); }
+  .nav-item.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* Main content */
+  .main {
+    padding: 0 48px 120px;
+  }
+
+  /* Topic panel */
+  .topic {
+    display: none;
+    padding-top: 72px;
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  .topic.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .topic-header {
+    margin-bottom: 64px;
+    padding-bottom: 48px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topic-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .topic-title {
+    font-size: clamp(28px, 4vw, 52px);
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+
+  .topic-title span {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .core-truth {
+    display: inline-block;
+    border-left: 2px solid var(--accent);
+    padding: 16px 24px;
+    background: rgba(196, 168, 130, 0.04);
+    font-size: 18px;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--text-primary);
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    max-width: 600px;
+  }
+
+  /* Memory map grid */
+  .map-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  @media (max-width: 768px) {
+    .map-grid { grid-template-columns: 1fr; }
+    .header, .nav, .main { padding-left: 24px; padding-right: 24px; }
+  }
+
+  .map-card {
+    background: var(--surface);
+    padding: 40px 36px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.3s ease;
+  }
+
+  .map-card:hover { background: #f9f7f4; }
+
+  .map-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 0;
+    background: var(--accent);
+    transition: height 0.4s ease;
+  }
+
+  .map-card:hover::before { height: 100%; }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent-dim);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .card-anchor {
+    font-size: clamp(20px, 2.5vw, 28px);
+    font-weight: 300;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+    font-style: italic;
+  }
+
+  .card-body {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+  }
+
+  .card-body strong {
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  /* Warning / note block */
+  .note-block {
+    margin-top: 48px;
+    padding: 28px 32px;
+    border: 1px solid var(--border);
+    background: rgba(196, 168, 130, 0.03);
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .note-icon {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    padding-top: 2px;
+    white-space: nowrap;
+  }
+
+  .note-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+  }
+
+  .note-text strong {
+    color: var(--text-primary);
+    font-weight: 400;
+  }
+
+  /* Divider */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 48px 0;
+  }
+
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .divider-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  /* Footer marker */
+  .footer-mark {
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <p class="eyebrow">nNocent — Pre-Production System</p>
+  <h1>Memory <em>Maps</em></h1>
+  <p class="header-sub">Not a script. Not talking points.<br>These are emotional anchors — four per topic — so the real version comes out naturally on camera.</p>
+</header>
+
+<nav class="nav">
+  <button class="nav-item active" onclick="showTopic(0)">01 — Performing</button>
+  <button class="nav-item" onclick="showTopic(1)">02 — Being Seen</button>
+  <button class="nav-item" onclick="showTopic(2)">03 — Success</button>
+  <button class="nav-item" onclick="showTopic(3)">04 — Discipline</button>
+  <button class="nav-item" onclick="showTopic(4)">05 — Childlike Faith</button>
+</nav>
+
+<main class="main">
+
+  <!-- TOPIC 1 -->
+  <section class="topic active" id="topic-0">
+    <div class="topic-header">
+      <p class="topic-num">Topic 01 of 05</p>
+      <h2 class="topic-title">Performing vs <span>Being Real</span></h2>
+      <div class="core-truth">"I've been performing longer than I've been being myself."</div>
+    </div>
+
+    <div class="map-grid">
+      <div class="map-card">
+        <div class="card-label">The Feeling</div>
+        <div class="card-anchor">The exhaustion of never being off.</div>
+        <div class="card-body">
+          Remember what it felt like to be "on" even when no one was watching. The version you put together before you walked into a room. That low-grade tension of maintaining something. <strong>Return here if you drift.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Specific</div>
+        <div class="card-anchor">You started performing at 12 years old.</div>
+        <div class="card-body">
+          Signed at 12. On stage before you had language for who you were. The performing wasn't just entertainment — it became identity before identity was formed. <strong>That's your specific. Nobody else has that timeline.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Honest Admission</div>
+        <div class="card-anchor">You got so good at it you couldn't find yourself underneath.</div>
+        <div class="card-body">
+          Not just on stage. In relationships. In rooms. In how you presented your wins. The performance became the default setting. <strong>Say this plainly. Don't soften it.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Turn</div>
+        <div class="card-anchor">God doesn't need the version. He needs you.</div>
+        <div class="card-body">
+          This isn't a conclusion speech. It's just the moment the performance stopped working. When you realized the only relationship that required nothing from the performance was the one you kept putting last. <strong>One sentence. Let it land.</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-block">
+      <span class="note-icon">NOTE</span>
+      <p class="note-text">The collaborator question that unlocks this topic: <strong>"When was the last time you were fully yourself with no one watching?"</strong> — Let that question sit. Don't rush the answer.</p>
+    </div>
+  </section>
+
+  <!-- TOPIC 2 -->
+  <section class="topic" id="topic-1">
+    <div class="topic-header">
+      <p class="topic-num">Topic 02 of 05</p>
+      <h2 class="topic-title">Being Seen vs <span>Being Known</span></h2>
+      <div class="core-truth">"Visibility isn't the same as intimacy."</div>
+    </div>
+
+    <div class="map-grid">
+      <div class="map-card">
+        <div class="card-label">The Feeling</div>
+        <div class="card-anchor">In a full room and still feeling invisible.</div>
+        <div class="card-body">
+          Not lonely — invisible. There's a difference. Loneliness is about absence. This is about being present and still unseen. You've felt this. <strong>That feeling is the door. Start there.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Specific</div>
+        <div class="card-anchor">You chased the girl that got all the attention.</div>
+        <div class="card-body">
+          From your journal — if she wants you, you have the attention of everyone else. That's not attraction. That's a visibility strategy. <strong>Name it exactly like that. It will hit harder than anything polished.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Honest Admission</div>
+        <div class="card-anchor">You chased being seen more than being understood.</div>
+        <div class="card-body">
+          And being understood requires honesty you weren't ready to give. Because if someone really knew you — all of it — and still left, that would hurt different. The performance was protection. <strong>Say what the fear actually was.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Turn</div>
+        <div class="card-anchor">Being known required you to stop hiding first.</div>
+        <div class="card-body">
+          Not a resolution. Just the realization that intimacy — with God, with people — has a prerequisite. Honesty. And you weren't ready until you were. <strong>Don't explain it. Just say when it shifted.</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-block">
+      <span class="note-icon">NOTE</span>
+      <p class="note-text">The collaborator question that unlocks this topic: <strong>"Has anyone ever actually known you — not the version, you?"</strong> — If there's a pause before the answer, stay in the pause.</p>
+    </div>
+  </section>
+
+  <!-- TOPIC 3 -->
+  <section class="topic" id="topic-2">
+    <div class="topic-header">
+      <p class="topic-num">Topic 03 of 05</p>
+      <h2 class="topic-title">Success vs <span>Emptiness</span></h2>
+      <div class="core-truth">"Success didn't fix what was internal."</div>
+    </div>
+
+    <div class="map-grid">
+      <div class="map-card">
+        <div class="card-label">The Feeling</div>
+        <div class="card-anchor">Getting it and still needing more to feel stable.</div>
+        <div class="card-body">
+          Not greed. Something closer to anxiety wearing success as a costume. The moment something landed you were already calculating the next thing. <strong>That restlessness is the feeling. Return to it.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Specific</div>
+        <div class="card-anchor">It still didn't fix problems in your family.</div>
+        <div class="card-body">
+          This is your most specific detail. The money, the rooms, the wins — none of it touched what mattered most. That's not a generic emptiness story. That's grief. <strong>You don't have to explain it. Just say it.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Honest Admission</div>
+        <div class="card-anchor">You thanked God but you weren't living for Him.</div>
+        <div class="card-body">
+          From your own words — God was your person you thanked, not the one you served. You were using His name to validate a life that was still self-directed. <strong>This costs something to say. Say it anyway.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Turn</div>
+        <div class="card-anchor">The destination was only serving yourself.</div>
+        <div class="card-body">
+          You wanted to arrive. But you never asked who the arriving was for. The moment that question became real — that's the turn. <strong>Don't preach it. Just remember when you first felt it.</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-block">
+      <span class="note-icon">NOTE</span>
+      <p class="note-text">The collaborator question that unlocks this topic: <strong>"What did you think would change once you made it — and what actually stayed the same?"</strong> — The gap between those two answers is the whole video.</p>
+    </div>
+  </section>
+
+  <!-- TOPIC 4 -->
+  <section class="topic" id="topic-3">
+    <div class="topic-header">
+      <p class="topic-num">Topic 04 of 05</p>
+      <h2 class="topic-title">Discipline vs <span>Desire</span></h2>
+      <div class="core-truth">"I want God, but I also want what pulls me away from Him."</div>
+    </div>
+
+    <div class="map-grid">
+      <div class="map-card">
+        <div class="card-label">The Feeling</div>
+        <div class="card-anchor">Knowing exactly what to do and choosing differently.</div>
+        <div class="card-body">
+          Not confusion. Clarity plus resistance. The uncomfortable truth that discipline fails not because you don't know better but because knowing better isn't always enough. <strong>That specific tension is the entry point.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Specific</div>
+        <div class="card-anchor">Money bought you permission to shut people out.</div>
+        <div class="card-body">
+          From your journal — money numbs reality because you can purchase one. That's not a money problem. That's a desire for control dressed in financial language. <strong>Name what you were actually buying when you spent.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Honest Admission</div>
+        <div class="card-anchor">You chose what felt good over what was right.</div>
+        <div class="card-body">
+          Not occasionally. Habitually. And you were disciplined enough in everything else that the contradiction was invisible to most people watching. <strong>The gap between your public discipline and private desire — say that plainly.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Turn</div>
+        <div class="card-anchor">Following God isn't confusing. It's uncomfortable.</div>
+        <div class="card-body">
+          This reframe is the whole video. People think they struggle with faith because they don't understand it. You realized you understood it fine. You just didn't want what it required. <strong>One sentence. Pause after it.</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-block">
+      <span class="note-icon">NOTE</span>
+      <p class="note-text">The collaborator question that unlocks this topic: <strong>"What's the thing you still reach for even when you know better?"</strong> — Don't let him give a safe answer. Stay with the real one.</p>
+    </div>
+  </section>
+
+  <!-- TOPIC 5 -->
+  <section class="topic" id="topic-4">
+    <div class="topic-header">
+      <p class="topic-num">Topic 05 of 05</p>
+      <h2 class="topic-title">Childlike Faith vs <span>Adult Control</span></h2>
+      <div class="core-truth">"I trust less now than I did when I was a kid."</div>
+    </div>
+
+    <div class="map-grid">
+      <div class="map-card">
+        <div class="card-label">The Feeling</div>
+        <div class="card-anchor">When faith felt simple and you didn't question it.</div>
+        <div class="card-body">
+          Before the world gave you reasons to protect yourself. Before you learned that trust had a cost. Before the 2008 recession. Before things collapsed that should've been permanent. <strong>Go back to before all of that. That's the feeling.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Specific</div>
+        <div class="card-anchor">Watching your family's financial stability collapse.</div>
+        <div class="card-body">
+          This is where adult control was born in you. Not from arrogance — from watching what happens when things fall apart and deciding you would never be that exposed again. <strong>That decision had a cost. Name it.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Honest Admission</div>
+        <div class="card-anchor">You trust yourself more than you trust God sometimes.</div>
+        <div class="card-body">
+          And it makes sense given your history. Control was survival. But survival strategies become cages. The same thing that protected you started limiting you. <strong>Say both parts — why it made sense and what it cost.</strong>
+        </div>
+      </div>
+
+      <div class="map-card">
+        <div class="card-label">The Turn</div>
+        <div class="card-anchor">God asks us to come like children — not weak. Honest.</div>
+        <div class="card-body">
+          The reframe that changes the whole topic. Childlike faith isn't naivety. It's the willingness to be known without armor. You had that once. The invitation is to return. <strong>Don't preach it. Just say what it felt like to stop controlling.</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-block">
+      <span class="note-icon">NOTE</span>
+      <p class="note-text">The collaborator question that unlocks this topic: <strong>"When did you stop trusting things to work out on their own — and what happened right before that?"</strong> — The answer to that question is the whole video.</p>
+    </div>
+  </section>
+
+  <div class="footer-mark">
+    <span>DAETRIUS — MEMORY MAPS v1</span>
+    <span>nNocent Pre-Production</span>
+  </div>
+
+</main>
+
+<script>
+  function showTopic(index) {
+    document.querySelectorAll('.topic').forEach((t, i) => {
+      t.classList.toggle('active', i === index);
+    });
+    document.querySelectorAll('.nav-item').forEach((n, i) => {
+      n.classList.toggle('active', i === index);
+    });
+  }
+</script>
+
+</body>
+</html>
